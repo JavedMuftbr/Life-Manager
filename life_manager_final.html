@@ -1,0 +1,766 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Productivity & Life Manager — Final</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap');
+    body { font-family:'Poppins',sans-serif; }
+
+    .notification{
+      position:fixed;top:20px;right:20px;background-color:#10b981;color:#fff;
+      padding:12px 20px;border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,.15);
+      z-index:1000;transform:translateX(100%);transition:transform .4s ease-out;
+      pointer-events:none;
+    }
+    .notification.show{ transform:translateX(0); }
+
+    .task-card{ transition:all .3s ease; }
+    .task-card:hover{ transform:translateY(-2px); box-shadow:0 10px 25px -5px rgba(0,0,0,.1); }
+
+    .progress-ring{ width:80px;height:80px; position:relative; display:inline-block; }
+    .progress-ring circle{ fill:none; stroke-width:8; stroke-linecap:round;
+      transform:rotate(-90deg); transform-origin:50% 50%; transition:stroke-dashoffset .35s; }
+    .progress-ring .background{ stroke:#e5e7eb; }
+    .progress-ring .progress{ stroke:#10b981; stroke-dasharray:251.2; }
+
+    .tab-button{ border-bottom:3px solid transparent; transition:all .3s ease; }
+    .tab-button.active{ border-bottom-color:#10b981; color:#10b981; font-weight:600; }
+    .tab-button:hover{ color:#374151; }
+
+    .badge{ font-size:.7rem; padding:.15rem .45rem; border-radius:.4rem; }
+    .badge-missed{ background:#fee2e2; color:#991b1b; }
+    .badge-done{ background:#dcfce7; color:#166534; }
+    .badge-pending{ background:#e5e7eb; color:#374151; }
+
+    .history-list{ max-height:240px; overflow:auto; }
+  </style>
+</head>
+<body class="bg-gradient-to-br from-blue-50 via-white to-indigo-50 min-h-screen">
+  <div class="container mx-auto px-4 py-6 max-w-6xl">
+    <!-- Header -->
+    <header class="bg-white rounded-2xl shadow-lg mb-6 p-6 border border-gray-100">
+      <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+        <div class="flex items-center gap-3">
+          <h1 class="text-3xl font-bold text-gray-800">Life & Productivity Manager</h1>
+          <span class="text-xs bg-indigo-100 text-indigo-700 px-2 py-1 rounded">Offline • Local Save</span>
+        </div>
+
+        <!-- Export / Import controls -->
+        <div class="flex items-center gap-2">
+          <button id="export-data" class="px-3 py-2 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700">
+            <i class="fa-solid fa-file-export mr-1"></i> Export
+          </button>
+          <label class="px-3 py-2 rounded-lg bg-slate-700 text-white hover:bg-slate-800 cursor-pointer">
+            <i class="fa-solid fa-file-import mr-1"></i> Import
+            <input id="import-file" type="file" accept="application/json" class="hidden">
+          </label>
+        </div>
+
+        <div class="text-right">
+          <div class="text-2xl font-bold text-indigo-600" id="current-time">00:00:00</div>
+          <div class="text-sm text-gray-500" id="current-date">Loading date...</div>
+        </div>
+      </div>
+    </header>
+
+    <!-- Notification Toast -->
+    <div id="notification" class="notification">
+      <div class="flex items-center"><i class="fas fa-bell mr-2"></i><span id="notification-message">Notification message</span></div>
+    </div>
+
+    <!-- Tabs Navigation -->
+    <div class="bg-white rounded-2xl shadow-lg mb-6 p-1 border border-gray-100">
+      <div class="flex space-x-1 flex-wrap">
+        <button class="tab-button active px-6 py-3 rounded-xl font-medium text-gray-700" data-tab="daily">Daily Tasks</button>
+        <button class="tab-button px-6 py-3 rounded-xl font-medium text-gray-700" data-tab="prayer">Namaz Times</button>
+        <button class="tab-button px-6 py-3 rounded-xl font-medium text-gray-700" data-tab="finance">Finance Tracker</button>
+        <button class="tab-button px-6 py-3 rounded-xl font-medium text-gray-700" data-tab="goals">Weekly Goals</button>
+        <button class="tab-button px-6 py-3 rounded-xl font-medium text-gray-700" data-tab="habits">Habits & Improvements</button>
+        <button class="tab-button px-6 py-3 rounded-xl font-medium text-gray-700" data-tab="future">Future Plans</button>
+      </div>
+    </div>
+
+    <!-- Tab Content -->
+    <div class="space-y-6">
+
+      <!-- Daily Tasks Tab -->
+      <div id="daily" class="tab-content">
+        <div class="bg-white rounded-2xl shadow-lg p-6 border border-gray-100">
+          <div class="flex justify-between items-center mb-6">
+            <h2 class="text-2xl font-bold text-gray-800">Daily Tasks</h2>
+            <div class="flex items-center space-x-4">
+              <div class="text-center">
+                <div class="text-3xl font-bold text-indigo-600" id="tasks-completed">0</div>
+                <div class="text-sm text-gray-500">Completed</div>
+              </div>
+              <div class="progress-ring">
+                <svg viewBox="0 0 100 100">
+                  <circle class="background" cx="50" cy="50" r="40"></circle>
+                  <circle class="progress" cx="50" cy="50" r="40" style="stroke-dashoffset: 251.2;"></circle>
+                </svg>
+                <div id="completion-percent" class="absolute inset-0 flex items-center justify-center text-lg font-bold text-gray-700 pointer-events-none">0%</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="mb-6">
+            <div class="flex gap-2 mb-3">
+              <input type="text" id="new-task" placeholder="Add a new task..." class="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
+              <button id="add-task" class="bg-indigo-600 text-white px-6 py-2 rounded-lg hover:bg-indigo-700 transition-colors">
+                <i class="fas fa-plus"></i>
+              </button>
+            </div>
+            <p class="text-xs text-gray-500">Tip: Tick = complete, Cross = missed. Time auto save hota hai.</p>
+          </div>
+
+          <div id="tasks-list" class="space-y-3"></div>
+
+          <div class="mt-6 pt-6 border-t border-gray-200">
+            <h3 class="text-lg font-semibold text-gray-700 mb-3">Today's Summary</h3>
+            <div id="daily-summary" class="text-gray-600">Your daily summary will appear here at midnight.</div>
+          </div>
+
+          <!-- Task History -->
+          <div class="mt-6 pt-6 border-t border-gray-200">
+            <div class="flex items-center justify-between">
+              <h3 class="text-lg font-semibold text-gray-700">History (last 7 days)</h3>
+              <button id="clear-history" class="text-xs text-red-600 hover:underline">Clear history</button>
+            </div>
+            <div id="history-list" class="history-list mt-3 space-y-2 text-sm"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Prayer Times Tab -->
+      <div id="prayer" class="tab-content hidden">
+        <div class="bg-white rounded-2xl shadow-lg p-6 border border-gray-100">
+          <div class="flex flex-col lg:flex-row gap-6">
+            <div class="flex-1">
+              <h2 class="text-2xl font-bold text-gray-800 mb-4">Namaz Times (Editable)</h2>
+              <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                <div class="p-4 bg-gradient-to-r from-amber-50 to-orange-50 rounded-xl border border-amber-100">
+                  <h3 class="text-lg font-semibold text-amber-800 flex items-center"><i class="fas fa-sun mr-2"></i> Fajr</h3>
+                  <div class="mt-2">
+                    <div class="text-2xl font-bold text-amber-900" id="fajr-time">05:30</div>
+                    <div class="text-sm text-amber-700" id="fajr-status">Next:</div>
+                  </div>
+                </div>
+                <div class="p-4 bg-gradient-to-r from-green-50 to-emerald-50 rounded-xl border border-green-100">
+                  <h3 class="text-lg font-semibold text-green-800 flex items-center"><i class="fas fa-cloud-sun mr-2"></i> Dhuhr</h3>
+                  <div class="mt-2">
+                    <div class="text-2xl font-bold text-green-900" id="dhuhr-time">12:15</div>
+                    <div class="text-sm text-green-700" id="dhuhr-status">Next:</div>
+                  </div>
+                </div>
+                <div class="p-4 bg-gradient-to-r from-teal-50 to-cyan-50 rounded-xl border border-teal-100">
+                  <h3 class="text-lg font-semibold text-teal-800 flex items-center"><i class="fas fa-sun mr-2"></i> Asr</h3>
+                  <div class="mt-2">
+                    <div class="text-2xl font-bold text-teal-900" id="asr-time">15:45</div>
+                    <div class="text-sm text-teal-700" id="asr-status">Next:</div>
+                  </div>
+                </div>
+                <div class="p-4 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl border border-blue-100">
+                  <h3 class="text-lg font-semibold text-blue-800 flex items-center"><i class="fas fa-cloud-sun mr-2"></i> Maghrib</h3>
+                  <div class="mt-2">
+                    <div class="text-2xl font-bold text-blue-900" id="maghrib-time">18:30</div>
+                    <div class="text-sm text-blue-700" id="maghrib-status">Next:</div>
+                  </div>
+                </div>
+                <div class="p-4 bg-gradient-to-r from-purple-50 to-violet-50 rounded-xl border border-purple-100">
+                  <h3 class="text-lg font-semibold text-purple-800 flex items-center"><i class="fas fa-moon mr-2"></i> Isha</h3>
+                  <div class="mt-2">
+                    <div class="text-2xl font-bold text-purple-900" id="isha-time">19:45</div>
+                    <div class="text-sm text-purple-700" id="isha-status">Next:</div>
+                  </div>
+                </div>
+                <div class="p-4 bg-gradient-to-r from-gray-50 to-slate-50 rounded-xl border border-gray-100">
+                  <h3 class="text-lg font-semibold text-gray-800 mb-2 flex items-center"><i class="fas fa-pray mr-2"></i> Jummah</h3>
+                  <div class="text-sm text-gray-700">Every Friday • <span id="jummah-time">12:30</span></div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Settings -->
+            <div class="w-full lg:w-80">
+              <h3 class="text-lg font-semibold text-blue-800 mb-2">Prayer Time Settings</h3>
+              <div class="space-y-3 p-4 bg-blue-50 rounded-xl border border-blue-100">
+                <div class="flex items-center">
+                  <input type="checkbox" id="prayer-notifications" class="mr-2 h-4 w-4 text-indigo-600" checked>
+                  <label for="prayer-notifications" class="text-sm text-gray-700">Enable notifications</label>
+                </div>
+                <div>
+                  <label class="text-sm text-gray-600">Pre-alert (minutes before)</label>
+                  <input id="prenotify-min" type="number" min="0" class="w-full mt-1 px-3 py-2 border rounded" value="5">
+                </div>
+                <div class="grid grid-cols-2 gap-2">
+                  <button id="enable-sound" class="px-3 py-2 bg-emerald-600 text-white rounded hover:bg-emerald-700"><i class="fa-solid fa-volume-high mr-1"></i>Enable Sound</button>
+                  <button id="test-alarm" class="px-3 py-2 bg-slate-700 text-white rounded hover:bg-slate-800"><i class="fa-solid fa-bell mr-1"></i>Test Alarm</button>
+                </div>
+                <hr class="my-2">
+                <div class="space-y-2">
+                  <div class="flex items-center justify-between"><label class="text-sm">Fajr</label><input id="edit-fajr" type="time" class="border rounded px-2 py-1"></div>
+                  <div class="flex items-center justify-between"><label class="text-sm">Dhuhr</label><input id="edit-dhuhr" type="time" class="border rounded px-2 py-1"></div>
+                  <div class="flex items-center justify-between"><label class="text-sm">Asr</label><input id="edit-asr" type="time" class="border rounded px-2 py-1"></div>
+                  <div class="flex items-center justify-between"><label class="text-sm">Maghrib</label><input id="edit-maghrib" type="time" class="border rounded px-2 py-1"></div>
+                  <div class="flex items-center justify-between"><label class="text-sm">Isha</label><input id="edit-isha" type="time" class="border rounded px-2 py-1"></div>
+                </div>
+                <button id="save-prayer-times" class="w-full mt-2 px-3 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700">Save Times</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Finance Tracker Tab -->
+      <div id="finance" class="tab-content hidden">
+        <div class="bg-white rounded-2xl shadow-lg p-6 border border-gray-100">
+          <div class="flex items-center justify-between mb-4">
+            <h2 class="text-2xl font-bold text-gray-800">Finance Tracker</h2>
+            <div class="text-xs text-gray-500">All values in <strong>Rs</strong></div>
+          </div>
+
+          <!-- Summary cards -->
+          <div class="grid grid-cols-1 lg:grid-cols-4 gap-6 mb-6">
+            <div class="p-6 rounded-xl border bg-gradient-to-br from-green-50 to-emerald-50 border-green-100">
+              <h3 class="text-lg font-semibold text-green-800 mb-2">Cash Balance</h3>
+              <div class="text-3xl font-bold text-green-900" id="cash-balance">Rs 0</div>
+              <div class="text-sm text-green-700 mt-1">Available cash</div>
+            </div>
+            <div class="p-6 rounded-xl border bg-gradient-to-br from-blue-50 to-indigo-50 border-blue-100">
+              <h3 class="text-lg font-semibold text-blue-800 mb-2">Savings Balance</h3>
+              <div class="text-3xl font-bold text-blue-900" id="savings-balance">Rs 0</div>
+              <div class="text-sm text-blue-700 mt-1">Bank / Wallets</div>
+            </div>
+            <div class="p-6 rounded-xl border bg-gradient-to-br from-purple-50 to-violet-50 border-purple-100">
+              <h3 class="text-lg font-semibold text-purple-800 mb-2">Invested</h3>
+              <div class="text-3xl font-bold text-purple-900" id="invested-balance">Rs 0</div>
+              <div class="text-sm text-purple-700 mt-1">Stocks / Funds / Gold</div>
+            </div>
+            <div class="p-6 rounded-xl border bg-gradient-to-br from-rose-50 to-pink-50 border-pink-100">
+              <h3 class="text-lg font-semibold text-rose-800 mb-2">Net Worth</h3>
+              <div class="text-3xl font-bold text-rose-900" id="networth">Rs 0</div>
+              <div class="text-sm text-rose-700 mt-1">Cash + Savings + Invested</div>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+            <div class="p-6 rounded-xl border bg-gradient-to-br from-slate-50 to-gray-50 border-gray-200">
+              <h3 class="text-lg font-semibold text-slate-800 mb-2">Today's Spend</h3>
+              <div class="text-3xl font-bold text-slate-900" id="today-spend">Rs 0</div>
+              <div class="text-sm text-slate-600 mt-1">Expenses recorded today</div>
+            </div>
+            <div class="p-6 rounded-xl border bg-gradient-to-br from-amber-50 to-orange-50 border-amber-100">
+              <h3 class="text-lg font-semibold text-amber-800 mb-2">Monthly Budget</h3>
+              <div class="flex items-end gap-2">
+                <div class="text-3xl font-bold text-amber-900" id="budget-remaining">Rs 0</div>
+                <div class="text-sm text-amber-700" id="budget-caption">Remaining</div>
+              </div>
+              <div class="mt-3 flex gap-2">
+                <input id="monthly-budget" type="number" class="w-1/2 px-3 py-2 border rounded" placeholder="Budget (Rs)">
+                <button id="save-budget" class="px-3 py-2 bg-amber-600 text-white rounded hover:bg-amber-700">Save</button>
+              </div>
+            </div>
+            <div class="p-6 rounded-xl border bg-gradient-to-br from-teal-50 to-emerald-50 border-emerald-100">
+              <h3 class="text-lg font-semibold text-emerald-800 mb-2">Set Balances</h3>
+              <div class="grid grid-cols-2 gap-2">
+                <input id="set-cash" type="number" class="px-3 py-2 border rounded" placeholder="Cash">
+                <input id="set-savings" type="number" class="px-3 py-2 border rounded" placeholder="Savings">
+                <input id="set-invested" type="number" class="px-3 py-2 border rounded" placeholder="Invested">
+                <button id="apply-balances" class="col-span-2 px-3 py-2 bg-emerald-600 text-white rounded hover:bg-emerald-700">Update Balances</button>
+              </div>
+              <p class="text-xs text-emerald-700 mt-2">Yahan ap apni total cash / saving / investment manual set kar sakte ho.</p>
+            </div>
+          </div>
+
+          <!-- Add entry -->
+          <div class="mb-6">
+            <h3 class="text-lg font-semibold text-gray-700 mb-3">Add Entry</h3>
+            <div class="grid grid-cols-1 md:grid-cols-12 gap-2">
+              <select id="txn-type" class="md:col-span-2 px-3 py-2 border rounded">
+                <option value="income">Income</option>
+                <option value="expense">Expense</option>
+                <option value="transfer">Transfer</option>
+                <option value="investment">Investment</option>
+              </select>
+              <input id="txn-amount" type="number" class="md:col-span-2 px-3 py-2 border rounded" placeholder="Amount">
+              <input id="txn-category" type="text" class="md:col-span-2 px-3 py-2 border rounded" placeholder="Category (e.g., Salary, Food)">
+              <input id="txn-note" type="text" class="md:col-span-3 px-3 py-2 border rounded" placeholder="Notes (optional)">
+              <select id="txn-from" class="md:col-span-1 px-3 py-2 border rounded">
+                <option value="cash">From: Cash</option>
+                <option value="savings">From: Savings</option>
+              </select>
+              <select id="txn-to" class="md:col-span-1 px-3 py-2 border rounded">
+                <option value="cash">To: Cash</option>
+                <option value="savings">To: Savings</option>
+                <option value="invested">To: Invested</option>
+              </select>
+              <button id="add-txn" class="md:col-span-1 bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700"><i class="fas fa-plus"></i></button>
+            </div>
+            <p class="text-xs text-gray-500 mt-1">Income → "To" account • Expense → "From" account • Transfer: From ↔ To • Investment: From → Invested</p>
+          </div>
+
+          <!-- Filters -->
+          <div class="flex items-center justify-between mb-2">
+            <div class="flex items-center gap-2">
+              <label class="text-sm text-gray-600">Show:</label>
+              <select id="filter-period" class="px-3 py-2 border rounded">
+                <option value="today">Today</option>
+                <option value="week">This Week</option>
+                <option value="month" selected>This Month</option>
+                <option value="all">All</option>
+              </select>
+            </div>
+            <div id="period-totals" class="text-sm text-gray-600"></div>
+          </div>
+
+          <div class="overflow-x-auto">
+            <table class="w-full">
+              <thead>
+                <tr class="border-b border-gray-200">
+                  <th class="text-left py-3 px-4 font-semibold text-gray-700">Date</th>
+                  <th class="text-left py-3 px-4 font-semibold text-gray-700">Type</th>
+                  <th class="text-left py-3 px-4 font-semibold text-gray-700">Amount</th>
+                  <th class="text-left py-3 px-4 font-semibold text-gray-700">Account(s)</th>
+                  <th class="text-left py-3 px-4 font-semibold text-gray-700">Category</th>
+                  <th class="text-left py-3 px-4 font-semibold text-gray-700">Notes</th>
+                  <th class="text-left py-3 px-4 font-semibold text-gray-700">Time</th>
+                  <th class="text-right py-3 px-4 font-semibold text-gray-700">Action</th>
+                </tr>
+              </thead>
+              <tbody id="txn-list"></tbody>
+            </table>
+          </div>
+
+          <!-- Finance History -->
+          <div class="mt-8 pt-6 border-t">
+            <h3 class="text-lg font-semibold text-gray-700 mb-2">Finance History (Daily Snapshots)</h3>
+            <div id="fin-history" class="history-list space-y-2 text-sm"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Weekly Goals Tab -->
+      <div id="goals" class="tab-content hidden">
+        <div class="bg-white rounded-2xl shadow-lg p-6 border border-gray-100">
+          <h2 class="text-2xl font-bold text-gray-800 mb-6">Weekly Goals</h2>
+          <div class="mb-6">
+            <h3 class="text-lg font-semibold text-gray-700 mb-3">Set Your Weekly Goals</h3>
+            <div class="flex gap-2 mb-4">
+              <input type="text" id="new-goal" placeholder="e.g., No fast food this week" class="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500">
+              <button id="add-goal" class="bg-indigo-600 text-white px-6 py-2 rounded-lg hover:bg-indigo-700 transition-colors">
+                <i class="fas fa-plus"></i>
+              </button>
+            </div>
+          </div>
+          <div id="goals-list" class="space-y-3"></div>
+          <div class="mt-6 p-4 bg-amber-50 rounded-xl border border-amber-100">
+            <h3 class="text-lg font-semibold text-amber-800 mb-2">Weekly Progress</h3>
+            <div class="w-full bg-gray-200 rounded-full h-2.5 mb-2">
+              <div id="goals-progress-bar" class="bg-amber-500 h-2.5 rounded-full" style="width:0%"></div>
+            </div>
+            <div class="text-sm text-amber-700"><span id="goals-completed">0</span> of <span id="total-goals">0</span> goals achieved</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Habits & Improvements Tab -->
+      <div id="habits" class="tab-content hidden">
+        <div class="bg-white rounded-2xl shadow-lg p-6 border border-gray-100">
+          <h2 class="text-2xl font-bold text-gray-800 mb-6">Habits & Self-Improvement</h2>
+          <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div>
+              <h3 class="text-lg font-semibold text-gray-700 mb-3">Bad Habits to Improve</h3>
+              <div class="flex gap-2 mb-4">
+                <input type="text" id="new-bad-habit" placeholder="e.g., Procrastination" class="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500">
+                <button id="add-bad-habit" class="bg-red-600 text-white px-6 py-2 rounded-lg hover:bg-red-700 transition-colors">
+                  <i class="fas fa-plus"></i>
+                </button>
+              </div>
+              <div id="bad-habits-list" class="space-y-2"></div>
+            </div>
+            <div>
+              <h3 class="text-lg font-semibold text-gray-700 mb-3">Solutions & Strategies</h3>
+              <div class="flex gap-2 mb-4">
+                <input type="text" id="new-solution" placeholder="e.g., Use Pomodoro technique" class="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500">
+                <button id="add-solution" class="bg-green-600 text-white px-6 py-2 rounded-lg hover:bg-green-700 transition-colors">
+                  <i class="fas fa-plus"></i>
+                </button>
+              </div>
+              <div id="solutions-list" class="space-y-2"></div>
+            </div>
+          </div>
+          <div class="mt-6 p-4 bg-green-50 rounded-xl border border-green-100">
+            <h3 class="text-lg font-semibold text-green-800 mb-2">Daily Habit Tracker</h3>
+            <p class="text-green-700 text-sm">Track your progress in overcoming bad habits and building positive ones.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Future Plans Tab -->
+      <div id="future" class="tab-content hidden">
+        <div class="bg-white rounded-2xl shadow-lg p-6 border border-gray-100">
+          <h2 class="text-2xl font-bold text-gray-800 mb-4">Future Plans & Steps</h2>
+
+          <!-- Long-term vision -->
+          <div class="mb-6">
+            <h3 class="text-lg font-semibold text-gray-700 mb-2">Long-Term Vision</h3>
+            <textarea id="future-plans" placeholder="Write your future goals, dreams, and aspirations..." class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 min-h-32 resize-none"></textarea>
+            <button id="save-plans" class="mt-3 bg-indigo-600 text-white px-6 py-2 rounded-lg hover:bg-indigo-700 transition-colors">Save Vision</button>
+          </div>
+
+          <!-- Structured steps -->
+          <div class="mb-3">
+            <h3 class="text-lg font-semibold text-gray-700">Add Plan Step</h3>
+            <div class="grid grid-cols-1 md:grid-cols-12 gap-2 mt-2">
+              <input id="step-title" class="md:col-span-3 px-3 py-2 border rounded" placeholder="Step title (e.g., Apply for X)">
+              <input id="step-date" type="date" class="md:col-span-2 px-3 py-2 border rounded">
+              <input id="step-time" type="time" class="md:col-span-2 px-3 py-2 border rounded">
+              <select id="step-priority" class="md:col-span-2 px-3 py-2 border rounded">
+                <option value="normal">Priority: Normal</option>
+                <option value="high">Priority: High</option>
+                <option value="low">Priority: Low</option>
+              </select>
+              <input id="step-notes" class="md:col-span-2 px-3 py-2 border rounded" placeholder="Notes">
+              <button id="add-step" class="md:col-span-1 bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700"><i class="fa fa-plus"></i></button>
+            </div>
+          </div>
+
+          <div id="steps-list" class="mt-4 space-y-2"></div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <script>
+    // ===== Utilities
+    const todayStr = new Date().toISOString().split('T')[0];
+    const fmtDate = d => new Date(d).toISOString().split('T')[0];
+    const dispTime = d => d.toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'});
+    const dispDate = s => new Date(s).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+    const Rs = n => 'Rs ' + Number(n||0).toLocaleString();
+
+    function showNotification(msg){
+      const toast=document.getElementById('notification');
+      document.getElementById('notification-message').textContent=msg;
+      toast.classList.add('show');
+      setTimeout(()=>toast.classList.remove('show'),3000);
+    }
+
+    // ===== State
+    const defaultPrayer = { fajr:'05:30', dhuhr:'12:15', asr:'15:45', maghrib:'18:30', isha:'19:45', jummah:'12:30' };
+    const state = {
+      // Tasks
+      tasks: JSON.parse(localStorage.getItem('tasks')) || [],
+      history: JSON.parse(localStorage.getItem('history')) || [],
+      lastOpenDate: localStorage.getItem('lastOpenDate') || todayStr,
+      // Prayer
+      prayerNotifications: localStorage.getItem('prayerNotifications') !== 'false',
+      prenotifyMin: parseInt(localStorage.getItem('prenotifyMin') || '5', 10),
+      prayerTimes: JSON.parse(localStorage.getItem('prayerTimes')) || defaultPrayer,
+      notifiedMap: JSON.parse(localStorage.getItem('notifiedMap')) || {},
+      soundEnabled: localStorage.getItem('soundEnabled') === 'true',
+      // Finance
+      accounts: JSON.parse(localStorage.getItem('accounts')) || { cash:0, savings:0, invested:0 },
+      transactions: JSON.parse(localStorage.getItem('transactions')) || [],
+      finHistory: JSON.parse(localStorage.getItem('finHistory')) || [],
+      finLastOpenDate: localStorage.getItem('finLastOpenDate') || todayStr,
+      monthlyBudget: parseFloat(localStorage.getItem('monthlyBudget') || '0') || 0,
+      // Goals/Habits/Future
+      goals: JSON.parse(localStorage.getItem('goals')) || [],
+      badHabits: JSON.parse(localStorage.getItem('badHabits')) || [],
+      solutions: JSON.parse(localStorage.getItem('solutions')) || [],
+      futurePlans: localStorage.getItem('futurePlans') || '',
+      steps: JSON.parse(localStorage.getItem('steps')) || []
+    };
+
+    // Save
+    function saveState(){
+      localStorage.setItem('tasks', JSON.stringify(state.tasks));
+      localStorage.setItem('history', JSON.stringify(state.history));
+      localStorage.setItem('lastOpenDate', state.lastOpenDate);
+
+      localStorage.setItem('prayerNotifications', state.prayerNotifications.toString());
+      localStorage.setItem('prayerTimes', JSON.stringify(state.prayerTimes));
+      localStorage.setItem('prenotifyMin', String(state.prenotifyMin));
+      localStorage.setItem('notifiedMap', JSON.stringify(state.notifiedMap));
+      localStorage.setItem('soundEnabled', state.soundEnabled?'true':'false');
+
+      localStorage.setItem('accounts', JSON.stringify(state.accounts));
+      localStorage.setItem('transactions', JSON.stringify(state.transactions));
+      localStorage.setItem('finHistory', JSON.stringify(state.finHistory));
+      localStorage.setItem('finLastOpenDate', state.finLastOpenDate);
+      localStorage.setItem('monthlyBudget', String(state.monthlyBudget||0));
+
+      localStorage.setItem('goals', JSON.stringify(state.goals));
+      localStorage.setItem('badHabits', JSON.stringify(state.badHabits));
+      localStorage.setItem('solutions', JSON.stringify(state.solutions));
+      localStorage.setItem('futurePlans', state.futurePlans);
+      localStorage.setItem('steps', JSON.stringify(state.steps));
+    }
+
+    // ===== DOM refs
+    const tabs=document.querySelectorAll('.tab-button');
+    const tabContents=document.querySelectorAll('.tab-content');
+    const currentTimeEl=document.getElementById('current-time');
+    const currentDateEl=document.getElementById('current-date');
+
+    // Tasks
+    const tasksList=document.getElementById('tasks-list');
+    const newTaskInput=document.getElementById('new-task');
+    const addTaskBtn=document.getElementById('add-task');
+    const tasksCompleted=document.getElementById('tasks-completed');
+    const completionPercent=document.getElementById('completion-percent');
+    const progressCircle=document.querySelector('.progress-ring .progress');
+    const dailySummary=document.getElementById('daily-summary');
+    const historyList=document.getElementById('history-list');
+    const clearHistoryBtn=document.getElementById('clear-history');
+
+    // Finance
+    const cashBalanceEl=document.getElementById('cash-balance');
+    const savingsBalanceEl=document.getElementById('savings-balance');
+    const investedBalanceEl=document.getElementById('invested-balance');
+    const networthEl=document.getElementById('networth');
+    const todaySpendEl=document.getElementById('today-spend');
+    const monthlyBudgetInput=document.getElementById('monthly-budget');
+    const saveBudgetBtn=document.getElementById('save-budget');
+    const budgetRemainingEl=document.getElementById('budget-remaining');
+    const budgetCaptionEl=document.getElementById('budget-caption');
+
+    const setCashInput=document.getElementById('set-cash');
+    const setSavingsInput=document.getElementById('set-savings');
+    const setInvestedInput=document.getElementById('set-invested');
+    const applyBalancesBtn=document.getElementById('apply-balances');
+
+    const txnTypeSelect=document.getElementById('txn-type');
+    const txnAmountInput=document.getElementById('txn-amount');
+    const txnCategoryInput=document.getElementById('txn-category');
+    const txnNoteInput=document.getElementById('txn-note');
+    const txnFromSelect=document.getElementById('txn-from');
+    const txnToSelect=document.getElementById('txn-to');
+    const addTxnBtn=document.getElementById('add-txn');
+    const filterPeriod=document.getElementById('filter-period');
+    const periodTotals=document.getElementById('period-totals');
+    const txnList=document.getElementById('txn-list');
+    const finHistoryList=document.getElementById('fin-history');
+
+    // Goals
+    const newGoalInput=document.getElementById('new-goal');
+    const addGoalBtn=document.getElementById('add-goal');
+    const goalsList=document.getElementById('goals-list');
+    const goalsProgressBar=document.getElementById('goals-progress-bar');
+    const goalsCompleted=document.getElementById('goals-completed');
+    const totalGoals=document.getElementById('total-goals');
+
+    // Habits
+    const newBadHabitInput=document.getElementById('new-bad-habit');
+    const addBadHabitBtn=document.getElementById('add-bad-habit');
+    const badHabitsList=document.getElementById('bad-habits-list');
+    const newSolutionInput=document.getElementById('new-solution');
+    const addSolutionBtn=document.getElementById('add-solution');
+    const solutionsList=document.getElementById('solutions-list');
+
+    // Future
+    const futurePlansInput=document.getElementById('future-plans');
+    const savePlansBtn=document.getElementById('save-plans');
+    const stepTitle=document.getElementById('step-title');
+    const stepDate=document.getElementById('step-date');
+    const stepTime=document.getElementById('step-time');
+    const stepPriority=document.getElementById('step-priority');
+    const stepNotes=document.getElementById('step-notes');
+    const addStepBtn=document.getElementById('add-step');
+    const stepsList=document.getElementById('steps-list');
+
+    // Prayer
+    const prayerNotificationsCheckbox=document.getElementById('prayer-notifications');
+    const prenotifyInput=document.getElementById('prenotify-min');
+    const fajrTime=document.getElementById('fajr-time');
+    const dhuhrTime=document.getElementById('dhuhr-time');
+    const asrTime=document.getElementById('asr-time');
+    const maghribTime=document.getElementById('maghrib-time');
+    const ishaTime=document.getElementById('isha-time');
+    const fajrStatus=document.getElementById('fajr-status');
+    const dhuhrStatus=document.getElementById('dhuhr-status');
+    const asrStatus=document.getElementById('asr-status');
+    const maghribStatus=document.getElementById('maghrib-status');
+    const ishaStatus=document.getElementById('isha-status');
+    const editFajr=document.getElementById('edit-fajr');
+    const editDhuhr=document.getElementById('edit-dhuhr');
+    const editAsr=document.getElementById('edit-asr');
+    const editMaghrib=document.getElementById('edit-maghrib');
+    const editIsha=document.getElementById('edit-isha');
+    const savePrayerBtn=document.getElementById('save-prayer-times');
+
+    // Export / Import
+    const exportBtn=document.getElementById('export-data');
+    const importInput=document.getElementById('import-file');
+
+    // ===== Tabs
+    tabs.forEach(tab=>{
+      tab.addEventListener('click',()=>{
+        tabs.forEach(t=>t.classList.remove('active'));
+        tabContents.forEach(c=>c.classList.add('hidden'));
+        tab.classList.add('active');
+        document.getElementById(tab.getAttribute('data-tab')).classList.remove('hidden');
+      });
+    });
+
+    // ===== Clock + Prayer
+    function updateClock(){
+      const now=new Date();
+      const tz='Asia/Karachi';
+      currentTimeEl.textContent=now.toLocaleTimeString('en-US',{timeZone:tz,hour12:true,hour:'2-digit',minute:'2-digit',second:'2-digit'});
+      currentDateEl.textContent=now.toLocaleDateString('en-US',{timeZone:tz,weekday:'long',year:'numeric',month:'long',day:'numeric'});
+
+      updatePrayerDisplay(now);
+      handlePrayerAlerts(now);
+    }
+    setInterval(updateClock,1000);
+
+    function timeToMin(hhmm){ const [h,m]=hhmm.split(':').map(Number); return h*60+m; }
+    function updatePrayerDisplay(now){
+      const t=state.prayerTimes;
+      fajrTime.textContent=t.fajr; dhuhrTime.textContent=t.dhuhr; asrTime.textContent=t.asr; maghribTime.textContent=t.maghrib; ishaTime.textContent=t.isha;
+      const cur = now.getHours()*60 + now.getMinutes();
+      const order=[{k:'fajr',v:t.fajr},{k:'dhuhr',v:t.dhuhr},{k:'asr',v:t.asr},{k:'maghrib',v:t.maghrib},{k:'isha',v:t.isha}];
+      let next=null, diff=1e9;
+      order.forEach(p=>{ let tm=timeToMin(p.v); if(p.k==='fajr' && cur>18*60) tm+=24*60; const d=tm-cur; if(d>0&&d<diff){ diff=d; next=p.k; } });
+      const map={fajr:fajrStatus,dhuhr:dhuhrStatus,asr:asrStatus,maghrib:maghribStatus,isha:ishaStatus};
+      if(next){ const h=Math.floor(diff/60), m=diff%60; map[next].textContent=`Next in ${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`; }
+    }
+    let audioCtx=null; function ensureAudio(){ if(!audioCtx){ audioCtx=new (window.AudioContext||window.webkitAudioContext)(); } }
+    function beep(ms=1200,freq=700){ if(!state.soundEnabled) return; ensureAudio(); const o=audioCtx.createOscillator(), g=audioCtx.createGain(); o.type='sine'; o.frequency.value=freq; o.connect(g); g.connect(audioCtx.destination); g.gain.setValueAtTime(0.0001, audioCtx.currentTime); g.gain.exponentialRampToValueAtTime(0.5, audioCtx.currentTime+0.05); o.start(); g.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime+ms/1000); o.stop(audioCtx.currentTime+ms/1000); }
+    function handlePrayerAlerts(now){
+      if(!state.prayerNotifications) return;
+      const cur=now.getHours()*60 + now.getMinutes(); const today=todayStr; if(!state.notifiedMap[today]) state.notifiedMap[today]={};
+      const t=state.prayerTimes, map={fajr:t.fajr,dhuhr:t.dhuhr,asr:t.asr,maghrib:t.maghrib,isha:t.isha};
+      Object.keys(map).forEach(k=>{
+        let pm=timeToMin(map[k]); if(k==='fajr' && cur>18*60) pm+=24*60; const d=pm-cur;
+        if(d===state.prenotifyMin && !state.notifiedMap[today][k+'_pre']){ showNotification(`${k[0].toUpperCase()+k.slice(1)} ${state.prenotifyMin} min me shuru.`); beep(900,820); state.notifiedMap[today][k+'_pre']=true; saveState(); }
+        if(d===0 && !state.notifiedMap[today][k+'_on']){ showNotification(`${k[0].toUpperCase()+k.slice(1)} ka waqt ho gaya.`); beep(1500,620); state.notifiedMap[today][k+'_on']=true; saveState(); }
+      });
+    }
+    prayerNotificationsCheckbox.addEventListener('change',()=>{ state.prayerNotifications=prayerNotificationsCheckbox.checked; saveState(); showNotification(state.prayerNotifications?'Prayer notifications enabled':'Prayer notifications disabled'); });
+    document.getElementById('enable-sound').addEventListener('click',()=>{ ensureAudio(); state.soundEnabled=true; saveState(); showNotification('Alarm sound enabled'); });
+    document.getElementById('test-alarm').addEventListener('click',()=>{ ensureAudio(); state.soundEnabled=true; beep(); });
+    function loadPrayerEditors(){ const t=state.prayerTimes; editFajr.value=t.fajr; editDhuhr.value=t.dhuhr; editAsr.value=t.asr; editMaghrib.value=t.maghrib; editIsha.value=t.isha; prayerNotificationsCheckbox.checked=state.prayerNotifications; prenotifyInput.value=state.prenotifyMin; }
+    savePrayerBtn.addEventListener('click',()=>{ state.prayerTimes={ fajr:editFajr.value||'05:30', dhuhr:editDhuhr.value||'12:15', asr:editAsr.value||'15:45', maghrib:editMaghrib.value||'18:30', isha:editIsha.value||'19:45', jummah:state.prayerTimes.jummah||'12:30'}; state.prenotifyMin=Math.max(0,parseInt(prenotifyInput.value||'5',10)); saveState(); updatePrayerDisplay(new Date()); showNotification('Prayer times saved!'); });
+
+    // ===== Tasks
+    function addTask(){ const t=newTaskInput.value.trim(); if(!t) return; const now=new Date(); state.tasks.push({text:t,date:fmtDate(now),time:dispTime(now),status:'pending'}); saveState(); renderTasks(); newTaskInput.value=''; showNotification('Task added!'); }
+    function markDone(e){ const i=+e.currentTarget.dataset.index; const now=new Date(); if(state.tasks[i].status==='done'){ state.tasks[i].status='pending'; delete state.tasks[i].completedTime; } else { state.tasks[i].status='done'; state.tasks[i].completedTime=dispTime(now); } saveState(); renderTasks(); }
+    function markMissed(e){ const i=+e.currentTarget.dataset.index; const now=new Date(); if(state.tasks[i].status==='missed'){ state.tasks[i].status='pending'; delete state.tasks[i].missedTime; } else { state.tasks[i].status='missed'; state.tasks[i].missedTime=dispTime(now); } saveState(); renderTasks(); }
+    function deleteTask(e){ const i=+e.currentTarget.dataset.index; const txt=state.tasks[i].text; state.tasks.splice(i,1); saveState(); renderTasks(); showNotification(`Deleted: ${txt}`); }
+    function updateTaskStats(){ const todays=state.tasks.filter(t=>t.date===todayStr); const done=todays.filter(t=>t.status==='done').length; const total=todays.length; const pct= total>0 ? Math.round((done/total)*100) : 0; tasksCompleted.textContent=done; completionPercent.textContent=`${pct}%`; const circ=2*Math.PI*40; progressCircle.style.strokeDashoffset = circ - (pct/100)*circ; const missed=todays.filter(t=>t.status==='missed').length; dailySummary.textContent=`Aaj ${done}/${total} complete (${pct}%). Missed: ${missed}.`; }
+    function renderTasks(){ tasksList.innerHTML=''; if(state.tasks.length===0){ tasksList.innerHTML='<div class="text-center py-8 text-gray-500">No tasks yet. Add your first task above!</div>'; } else { state.tasks.forEach((t,i)=>{ const card=document.createElement('div'); card.className='task-card p-4 bg-gray-50 rounded-xl border border-gray-200 flex justify-between items-center'; const badge=t.status==='done'?`<span class="badge badge-done ml-2">done ${t.completedTime?('@ '+t.completedTime):''}</span>`:t.status==='missed'?`<span class="badge badge-missed ml-2">missed ${t.missedTime?('@ '+t.missedTime):''}</span>`:`<span class="badge badge-pending ml-2">pending</span>`; card.innerHTML=`<div class="flex items-center gap-2"><button class="mark-done text-green-600 hover:text-green-800" data-index="${i}" title="Mark done"><i class="fa-regular ${t.status==='done'?'fa-square-check':'fa-square'} text-xl"></i></button><button class="mark-missed text-red-600 hover:text-red-700" data-index="${i}" title="Mark missed"><i class="fa-regular ${t.status==='missed'?'fa-circle-xmark':'fa-circle'} text-xl"></i></button><div class="${t.status==='done'?'line-through text-gray-500':'text-gray-800'} font-medium">${t.text}${badge}</div></div><div class="flex items-center gap-3 text-xs text-gray-500"><span>${dispDate(t.date)} • ${t.time}</span><button class="delete-task text-gray-400 hover:text-red-600" data-index="${i}" title="Delete"><i class="fas fa-trash"></i></button></div>`; tasksList.appendChild(card); }); } document.querySelectorAll('.mark-done').forEach(b=>b.addEventListener('click',markDone)); document.querySelectorAll('.mark-missed').forEach(b=>b.addEventListener('click',markMissed)); document.querySelectorAll('.delete-task').forEach(b=>b.addEventListener('click',deleteTask)); updateTaskStats(); }
+    function archiveTasksIfDayChanged(){ if(state.lastOpenDate!==todayStr){ const prev=state.tasks.filter(t=>t.date===state.lastOpenDate); const done=prev.filter(t=>t.status==='done').length; const missed=prev.filter(t=>t.status==='missed').length; state.history.unshift({date:state.lastOpenDate,total:prev.length,done,missed,items:prev}); state.history=state.history.slice(0,30); state.tasks=[]; state.lastOpenDate=todayStr; saveState(); renderTasks(); renderTaskHistory(); showNotification('Task history snapshot saved. New day!'); } }
+    function renderTaskHistory(){ historyList.innerHTML=''; if(state.history.length===0){ historyList.innerHTML='<div class="text-gray-500">No history yet.</div>'; return; } state.history.slice(0,7).forEach(h=>{ const pct=h.total>0?Math.round((h.done/h.total)*100):0; const row=document.createElement('div'); row.className='p-3 bg-gray-50 border border-gray-200 rounded flex items-center justify-between'; row.innerHTML=`<div><div class="font-semibold">${dispDate(h.date)}</div><div class="text-xs text-gray-500">Done ${h.done}/${h.total} • Missed ${h.missed} • ${pct}%</div></div><details class="text-xs"><summary class="cursor-pointer text-indigo-600">View</summary><ul class="mt-2 list-disc ml-5">${h.items.map(it=>`<li>${it.text} <span class="badge ${it.status==='done'?'badge-done':(it.status==='missed'?'badge-missed':'badge-pending')}">${it.status}</span></li>`).join('')}</ul></details>`; historyList.appendChild(row); }); }
+    clearHistoryBtn.addEventListener('click',()=>{ if(confirm('Clear all task history?')){ state.history=[]; saveState(); renderTaskHistory(); } });
+
+    // ===== Finance
+    function renderAccounts(){ cashBalanceEl.textContent=Rs(state.accounts.cash); savingsBalanceEl.textContent=Rs(state.accounts.savings); investedBalanceEl.textContent=Rs(state.accounts.invested); networthEl.textContent=Rs(state.accounts.cash+state.accounts.savings+state.accounts.invested); }
+    function addTxn(){ const type=txnTypeSelect.value; const amount=parseFloat(txnAmountInput.value); const category=txnCategoryInput.value.trim()||'-'; const note=txnNoteInput.value.trim(); const from=txnFromSelect.value; const to=txnToSelect.value; if(!amount||amount<=0){ showNotification('Amount sahi enter karen.'); return; } const now=new Date(); const t={ id: Date.now(), type, amount, category, note, from, to, date:fmtDate(now), time:dispTime(now) }; applyTxn(t,+1); state.transactions.push(t); saveState(); renderFinance(); txnAmountInput.value=''; txnCategoryInput.value=''; txnNoteInput.value=''; showNotification('Entry added!'); }
+    function applyTxn(t,dir){ const a=state.accounts; const amt=dir*Number(t.amount); if(t.type==='income'){ if(t.to==='cash') a.cash+=amt; if(t.to==='savings') a.savings+=amt; } else if(t.type==='expense'){ if(t.from==='cash') a.cash-=amt; if(t.from==='savings') a.savings-=amt; } else if(t.type==='transfer'){ if(t.from===t.to) return; if(t.from==='cash') a.cash-=amt; if(t.from==='savings') a.savings-=amt; if(t.to==='cash') a.cash+=amt; if(t.to==='savings') a.savings+=amt; if(t.to==='invested') a.invested+=amt; } else if(t.type==='investment'){ if(t.from==='cash') a.cash-=amt; if(t.from==='savings') a.savings-=amt; a.invested+=amt; } }
+    function deleteTxn(e){ const id=+e.currentTarget.dataset.id; const idx=state.transactions.findIndex(x=>x.id===id); if(idx===-1) return; if(!confirm('Delete this entry?')) return; const t=state.transactions[idx]; applyTxn(t,-1); state.transactions.splice(idx,1); saveState(); renderFinance(); showNotification('Entry deleted.'); }
+    function filterTxns(period){ const all=state.transactions.slice().sort((a,b)=> new Date(b.date+'T'+b.time)-new Date(a.date+'T'+a.time)); const now=new Date(); if(period==='all') return all; if(period==='today'){ return all.filter(t=>t.date===todayStr); } if(period==='week'){ const start=new Date(); start.setDate(now.getDate()-6); const s=fmtDate(start); return all.filter(t=>t.date>=s); } if(period==='month'){ const m=new Date(now.getFullYear(), now.getMonth(), 1); const s=fmtDate(m); return all.filter(t=>t.date>=s); } return all; }
+    function renderTxnTable(){ const period=filterPeriod.value; const tx=filterTxns(period); txnList.innerHTML=''; if(tx.length===0){ txnList.innerHTML='<tr><td colspan="8" class="text-center py-6 text-gray-500">No entries.</td></tr>'; } else { tx.forEach(t=>{ const tr=document.createElement('tr'); tr.className='border-b border-gray-100 hover:bg-gray-50'; const acc=(t.type==='income')?`— → ${t.to}`:(t.type==='expense')?`${t.from} → —`:`${t.from} → ${t.to}`; tr.innerHTML=`<td class="py-3 px-4">${dispDate(t.date)}</td><td class="py-3 px-4 capitalize">${t.type}</td><td class="py-3 px-4 font-medium">${Rs(t.amount)}</td><td class="py-3 px-4">${acc}</td><td class="py-3 px-4">${t.category||'-'}</td><td class="py-3 px-4">${t.note||''}</td><td class="py-3 px-4 text-gray-600">${t.time}</td><td class="py-3 px-4 text-right"><button class="text-red-600 hover:text-red-800" data-id="${t.id}" title="Delete"><i class="fa fa-trash"></i></button></td>`; txnList.appendChild(tr); }); txnList.querySelectorAll('button[data-id]').forEach(b=>b.addEventListener('click',deleteTxn)); }
+      // totals
+      const exp = tx.filter(t=>t.type==='expense'|| (t.type==='transfer'&& (t.from==='cash'||t.from==='savings') && (t.to==='invested'||t.to==='-')) ).reduce((s,t)=>s+Number(t.amount),0);
+      const inc = tx.filter(t=>t.type==='income').reduce((s,t)=>s+Number(t.amount),0);
+      periodTotals.textContent = `Income: ${Rs(inc)} • Expense: ${Rs(exp)}`;
+    }
+    function calcTodaySpend(){ const t=state.transactions.filter(x=>x.type==='expense' && x.date===todayStr); return t.reduce((s,x)=>s+Number(x.amount),0); }
+    function calcMonthExpense(){ const now=new Date(); const start=fmtDate(new Date(now.getFullYear(), now.getMonth(), 1)); const t=state.transactions.filter(x=>x.type==='expense' && x.date>=start); return t.reduce((s,x)=>s+Number(x.amount),0); }
+    function renderFinance(){ renderAccounts(); todaySpendEl.textContent=Rs(calcTodaySpend()); renderTxnTable(); renderFinHistory(); renderBudget(); }
+    function renderBudget(){ if(!state.monthlyBudget||state.monthlyBudget<=0){ budgetRemainingEl.textContent='Set budget'; budgetCaptionEl.textContent='Monthly budget not set'; return; } const spent=calcMonthExpense(); const rem=state.monthlyBudget-spent; budgetRemainingEl.textContent = Rs(rem); budgetCaptionEl.textContent = `Remaining • Spent ${Rs(spent)} of ${Rs(state.monthlyBudget)}`; monthlyBudgetInput.value = state.monthlyBudget; }
+    saveBudgetBtn.addEventListener('click',()=>{ const v=parseFloat(monthlyBudgetInput.value); if(isNaN(v)||v<=0){ showNotification('Valid budget enter karein.'); return; } state.monthlyBudget=v; saveState(); renderBudget(); showNotification('Monthly budget saved.'); });
+    applyBalancesBtn.addEventListener('click',()=>{ const c=parseFloat(setCashInput.value); const s=parseFloat(setSavingsInput.value); const i=parseFloat(setInvestedInput.value); if(!isNaN(c)) state.accounts.cash=c; if(!isNaN(s)) state.accounts.savings=s; if(!isNaN(i)) state.accounts.invested=i; saveState(); renderAccounts(); showNotification('Balances updated.'); });
+    addTxnBtn.addEventListener('click',addTxn);
+    filterPeriod.addEventListener('change',renderTxnTable);
+
+    // Finance history snapshots (daily)
+    function financeArchiveIfDayChanged(){
+      if(state.finLastOpenDate !== todayStr){
+        const prevDate = state.finLastOpenDate;
+        const items = state.transactions.filter(t=>t.date===prevDate);
+        const inc = items.filter(t=>t.type==='income').reduce((s,t)=>s+Number(t.amount),0);
+        const exp = items.filter(t=>t.type==='expense').reduce((s,t)=>s+Number(t.amount),0);
+        state.finHistory.unshift({ date: prevDate, count: items.length, income: inc, expense: exp, items });
+        state.finHistory = state.finHistory.slice(0,30);
+        state.finLastOpenDate = todayStr;
+        saveState();
+        renderFinHistory();
+        showNotification('Finance snapshot saved to history.');
+      }
+    }
+    function renderFinHistory(){
+      finHistoryList.innerHTML='';
+      if(state.finHistory.length===0){ finHistoryList.innerHTML='<div class="text-gray-500">No finance history yet.</div>'; return; }
+      state.finHistory.slice(0,7).forEach(h=>{
+        const row=document.createElement('div');
+        row.className='p-3 bg-gray-50 border border-gray-200 rounded';
+        row.innerHTML = `<div class="flex items-center justify-between">
+          <div>
+            <div class="font-semibold">${dispDate(h.date)}</div>
+            <div class="text-xs text-gray-500">Entries ${h.count} • Income ${Rs(h.income)} • Expense ${Rs(h.expense)}</div>
+          </div>
+          <details class="text-xs"><summary class="cursor-pointer text-indigo-600">View</summary>
+            <ul class="mt-2 list-disc ml-5">${h.items.map(it=>`<li class="mb-1"><span class="capitalize">${it.type}</span> — ${Rs(it.amount)} • ${it.category||'-'} • ${it.note||''}</li>`).join('')}</ul>
+          </details>
+        </div>`;
+        finHistoryList.appendChild(row);
+      });
+    }
+
+    // ===== Goals
+    function addGoal(){ const t=newGoalInput.value.trim(); if(!t) return; state.goals.push({text:t,completed:false}); saveState(); renderGoals(); newGoalInput.value=''; }
+    function toggleGoal(e){ const i=+e.currentTarget.dataset.index; const now=new Date(); state.goals[i].completed=!state.goals[i].completed; if(state.goals[i].completed){ state.goals[i].completedDate=fmtDate(now); } else { delete state.goals[i].completedDate; } saveState(); renderGoals(); }
+    function deleteGoal(e){ const i=+e.currentTarget.dataset.index; state.goals.splice(i,1); saveState(); renderGoals(); }
+    function renderGoals(){ goalsList.innerHTML=''; if(state.goals.length===0){ goalsList.innerHTML='<div class="text-center py-8 text-gray-500">No goals set yet. Add your first goal above!</div>'; } else { state.goals.forEach((g,i)=>{ const el=document.createElement('div'); el.className='p-4 bg-gray-50 rounded-xl border border-gray-200 flex justify-between items-center'; el.innerHTML=`<div class="flex items-center"><button class="toggle-goal mr-3 text-green-600 hover:text-green-800" data-index="${i}"><i class="far ${g.completed?'fa-check-circle text-green-600':'fa-circle'} text-lg"></i></button><div><div class="${g.completed?'line-through text-gray-500':'text-gray-800'} font-medium">${g.text}</div>${g.completed?`<div class="text-sm text-green-600">Achieved on ${g.completedDate}</div>`:''}</div></div><button class="delete-goal text-gray-400 hover:text-red-600" data-index="${i}"><i class="fas fa-trash"></i></button>`; goalsList.appendChild(el); }); } document.querySelectorAll('.toggle-goal').forEach(b=>b.addEventListener('click',toggleGoal)); document.querySelectorAll('.delete-goal').forEach(b=>b.addEventListener('click',deleteGoal)); updateGoalStats(); }
+    function updateGoalStats(){ const done=state.goals.filter(g=>g.completed).length; const total=state.goals.length; goalsCompleted.textContent=done; totalGoals.textContent=total; const pct= total>0 ? Math.round((done/total)*100) : 0; goalsProgressBar.style.width=`${pct}%`; }
+
+    // ===== Habits
+    function addBadHabit(){ const t=newBadHabitInput.value.trim(); if(!t) return; state.badHabits.push(t); saveState(); renderBadHabits(); newBadHabitInput.value=''; }
+    function deleteBadHabit(e){ const i=+e.currentTarget.dataset.index; state.badHabits.splice(i,1); saveState(); renderBadHabits(); }
+    function renderBadHabits(){ badHabitsList.innerHTML=''; if(state.badHabits.length===0){ badHabitsList.innerHTML='<div class="text-center py-8 text-gray-500">No bad habits listed yet.</div>'; return; } state.badHabits.forEach((h,i)=>{ const el=document.createElement('div'); el.className='p-3 bg-red-50 rounded-lg border border-red-200 flex justify-between items-center'; el.innerHTML=`<div class="flex items-center"><i class="fas fa-times-circle text-red-500 mr-2"></i><span class="text-red-800">${h}</span></div><button class="delete-bad-habit text-red-400 hover:text-red-600" data-index="${i}"><i class="fas fa-trash"></i></button>`; badHabitsList.appendChild(el); }); document.querySelectorAll('.delete-bad-habit').forEach(b=>b.addEventListener('click',deleteBadHabit)); }
+    function addSolution(){ const t=newSolutionInput.value.trim(); if(!t) return; state.solutions.push(t); saveState(); renderSolutions(); newSolutionInput.value=''; }
+    function deleteSolution(e){ const i=+e.currentTarget.dataset.index; state.solutions.splice(i,1); saveState(); renderSolutions(); }
+    function renderSolutions(){ solutionsList.innerHTML=''; if(state.solutions.length===0){ solutionsList.innerHTML='<div class="text-center py-8 text-gray-500">No solutions added yet.</div>'; return; } state.solutions.forEach((s,i)=>{ const el=document.createElement('div'); el.className='p-3 bg-green-50 rounded-lg border border-green-200 flex justify-between items-center'; el.innerHTML=`<div class="flex items-center"><i class="fas fa-check-circle text-green-500 mr-2"></i><span class="text-green-800">${s}</span></div><button class="delete-solution text-green-400 hover:text-green-600" data-index="${i}"><i class="fas fa-trash"></i></button>`; solutionsList.appendChild(el); }); document.querySelectorAll('.delete-solution').forEach(b=>b.addEventListener('click',deleteSolution)); }
+
+    // ===== Future Plans Steps
+    function addStep(){ const title=stepTitle.value.trim(); if(!title) return; const date=stepDate.value||todayStr; const time=stepTime.value||'09:00'; const priority=stepPriority.value; const notes=stepNotes.value.trim(); state.steps.push({ id:Date.now(), title, date, time, priority, notes, done:false }); saveState(); renderSteps(); stepTitle.value=''; stepNotes.value=''; }
+    function toggleStep(e){ const id=+e.currentTarget.dataset.id; const s=state.steps.find(x=>x.id===id); if(!s) return; s.done=!s.done; saveState(); renderSteps(); }
+    function deleteStep(e){ const id=+e.currentTarget.dataset.id; const i=state.steps.findIndex(x=>x.id===id); if(i>-1){ state.steps.splice(i,1); saveState(); renderSteps(); } }
+    function renderSteps(){ stepsList.innerHTML=''; if(state.steps.length===0){ stepsList.innerHTML='<div class="text-gray-500">No steps yet. Add above.</div>'; return; } const sorted=[...state.steps].sort((a,b)=> new Date(a.date+'T'+a.time)-new Date(b.date+'T'+b.time)); sorted.forEach(s=>{ const row=document.createElement('div'); const prColor=s.priority==='high'?'bg-rose-100 text-rose-700':(s.priority==='low'?'bg-slate-100 text-slate-700':'bg-amber-100 text-amber-700'); row.className='p-3 bg-gray-50 border border-gray-200 rounded flex items-center justify-between'; row.innerHTML=`<div class="flex items-center gap-3"><button class="text-green-600 hover:text-green-800" data-id="${s.id}" title="Mark done"><i class="far ${s.done?'fa-check-circle':'fa-circle'} text-lg"></i></button><div><div class="${s.done?'line-through text-gray-500':'text-gray-800'} font-medium">${s.title}</div><div class="text-xs text-gray-500">${dispDate(s.date)} • ${s.time} • <span class="px-2 py-0.5 rounded ${prColor}">${s.priority}</span> ${s.notes?('• '+s.notes):''}</div></div></div><button class="text-red-600 hover:text-red-800" data-id="${s.id}" title="Delete"><i class="fa fa-trash"></i></button>`; stepsList.appendChild(row); }); stepsList.querySelectorAll('button[title="Mark done"]').forEach(b=>b.addEventListener('click',toggleStep)); stepsList.querySelectorAll('button[title="Delete"]').forEach(b=>b.addEventListener('click',deleteStep)); }
+
+    // ===== Export / Import
+    exportBtn.addEventListener('click',()=>{ const backup={ exportedAt:new Date().toISOString(), state }; const blob=new Blob([JSON.stringify(backup,null,2)],{type:'application/json'}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=`life_manager_backup_${todayStr}.json`; a.click(); URL.revokeObjectURL(a.href); });
+    importInput.addEventListener('change',async (e)=>{ const f=e.target.files[0]; if(!f) return; try{ const txt=await f.text(); const data=JSON.parse(txt); if(!data.state) throw new Error('Invalid'); Object.assign(state,data.state); saveState(); renderAll(); showNotification('Import successful!'); }catch(err){ console.error(err); showNotification('Import failed.'); } finally{ importInput.value=''; } });
+
+    // ===== Render helpers
+    function renderAll(){ renderTasks(); renderTaskHistory(); renderFinance(); futurePlansInput.value=state.futurePlans; loadPrayerEditors(); renderSteps(); }
+    function scheduleMidnightJobs(){ const now=new Date(); const next=new Date(now); next.setHours(0,0,10,0); if(next<=now) next.setDate(next.getDate()+1); setTimeout(()=>{ archiveTasksIfDayChanged(); financeArchiveIfDayChanged(); scheduleMidnightJobs(); }, next-now); }
+
+    // Events
+    addTaskBtn.addEventListener('click',addTask);
+    newTaskInput.addEventListener('keypress',e=>{ if(e.key==='Enter') addTask(); });
+
+    savePlansBtn.addEventListener('click',()=>{ state.futurePlans=futurePlansInput.value; saveState(); showNotification('Vision saved!'); });
+    addStepBtn.addEventListener('click',addStep);
+
+    // Init
+    (function init(){
+      updateClock();
+      // One-time archives if day changed since last open
+      archiveTasksIfDayChanged();
+      financeArchiveIfDayChanged();
+      renderAll();
+      scheduleMidnightJobs();
+    })();
+  </script>
+</body>
+</html>
