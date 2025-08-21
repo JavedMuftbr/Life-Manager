@@ -1,0 +1,627 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover"/>
+  <title>Life Manager • Mobile</title>
+
+  <!-- PWA -->
+  <link rel="manifest" href="manifest.json?v=2">
+  <link rel="apple-touch-icon" sizes="180x180" href="pwa_icons/apple-touch-icon.png?v=2">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="theme-color" content="#4f46e5">
+  
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" rel="stylesheet">
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap');
+    :root{
+      --brand:#4f46e5;
+      --card:#ffffff;
+      --muted:#6b7280;
+      --ring:#10b981;
+      --shadow:0 10px 30px rgba(0,0,0,.08);
+      --safe-bottom: env(safe-area-inset-bottom, 16px);
+      --safe-top: env(safe-area-inset-top, 16px);
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{
+      font-family:'Poppins',sans-serif;
+      background: linear-gradient(180deg,#eef2ff 0%,#fff 40%);
+      color:#111827;
+      padding-bottom: 88px; /* space for bottom nav */
+    }
+    /* Sticky app bar */
+    .appbar{
+      position:sticky; top:0; left:0; right:0;
+      background:#4f46e5; color:#fff; z-index:1000;
+      padding: calc(var(--safe-top) + 6px) 16px 10px 16px;
+      box-shadow: var(--shadow);
+      border-bottom-left-radius: 16px; border-bottom-right-radius:16px;
+    }
+    .app-title{font-size:22px; font-weight:700; line-height:1.1}
+    .status-chip{background:rgba(255,255,255,.18); padding:4px 10px; border-radius:999px; font-size:12px}
+    .clock{font-weight:700; font-size:24px; letter-spacing:1px}
+    .date{font-size:12px; opacity:.9}
+    .top-actions button{background:rgba(255,255,255,.15); border:1px solid rgba(255,255,255,.25);}
+    .top-actions i{color:#fff}
+    /* Card */
+    .card{background:var(--card); border-radius:18px; box-shadow:var(--shadow); border:1px solid #eef2ff}
+    /* Tab content container spacing */
+    .section{padding:16px}
+    /* Progress ring */
+    .ring{width:72px;height:72px; position:relative}
+    .ring svg{transform:rotate(-90deg)}
+    .ring .pct{position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:14px}
+    /* List rows */
+    .row{display:flex; align-items:center; justify-content:space-between; gap:12px; padding:12px 14px; border:1px solid #eef2ff; border-radius:12px; background:#fafafe}
+    .row + .row{margin-top:10px}
+    .row i{min-width:20px}
+    .pill{padding:4px 10px; border-radius:999px; font-size:12px}
+    /* Bottom navigation (mobile) */
+    .bottom-nav{
+      position:fixed; bottom:0; left:0; right:0; z-index:1000;
+      background:#fff; border-top:1px solid #e5e7eb; box-shadow:0 -6px 20px rgba(0,0,0,.06);
+      padding:8px 8px calc(var(--safe-bottom)); display:flex; justify-content:space-between; gap:6px;
+    }
+    .nav-btn{
+      flex:1; display:flex; flex-direction:column; align-items:center; gap:6px;
+      padding:8px 4px; border-radius:12px; border:1px solid #eef2ff; background:#f8fafc;
+      font-size:11px; color:#334155;
+    }
+    .nav-btn.active{background:#eef2ff; color:#4f46e5; border-color:#c7d2fe}
+    .nav-btn i{font-size:16px}
+    /* Floating add button (for current tab) */
+    .fab{position:fixed; right:16px; bottom: calc(64px + var(--safe-bottom)); z-index:900;
+      width:52px; height:52px; border-radius:50%; display:flex; align-items:center; justify-content:center;
+      background:var(--brand); color:#fff; box-shadow:0 12px 30px rgba(79,70,229,.45)}
+    /* Larger tap targets */
+    button, .btn{min-height:44px}
+    input, textarea{padding:12px 14px; border:1px solid #e5e7eb; border-radius:12px; outline:none}
+    input:focus, textarea:focus{border-color:#c7d2fe; box-shadow:0 0 0 3px rgba(79,70,229,.15)}
+    textarea{min-height:110px; resize:none}
+    /* Hide desktop tabs on mobile (we use bottom nav) */
+    .desktop-tabs{display:none}
+    /* Utility */
+    .muted{color:var(--muted)}
+    .kpi{font-size:22px; font-weight:800}
+    .kpi-label{font-size:12px; color:#64748b}
+    .grid-3{display:grid; grid-template-columns:1fr; gap:12px}
+    @media(min-width:560px){ .grid-3{grid-template-columns:repeat(3,1fr)} .desktop-tabs{display:block} .bottom-nav{display:none} body{padding-bottom:24px} .fab{bottom:24px} }
+  </style>
+</head>
+<body>
+  <!-- App Bar -->
+  <header class="appbar">
+    <div class="flex items-start justify-between gap-4">
+      <div>
+        <div class="app-title">Life & Productivity Manager</div>
+        <div class="mt-1 inline-flex items-center gap-2">
+          <span class="status-chip">Offline • Local Save</span>
+        </div>
+      </div>
+      <div class="text-right">
+        <div id="top-time" class="clock">00:00:00</div>
+        <div id="top-date" class="date">Loading…</div>
+      </div>
+    </div>
+    <div class="mt-3 top-actions flex gap-2">
+      <button id="exportBtn" class="px-3 py-2 rounded-lg flex items-center gap-2"><i class="fa-solid fa-file-export"></i><span>Export</span></button>
+      <label class="px-3 py-2 rounded-lg flex items-center gap-2 cursor-pointer">
+        <i class="fa-solid fa-file-import"></i><span>Import</span>
+        <input id="importInput" type="file" accept="application/json" class="hidden">
+      </label>
+    </div>
+  </header>
+
+  <!-- Desktop tab strip (hidden on phones) -->
+  <div class="section desktop-tabs">
+    <div class="card p-2">
+      <div class="flex flex-wrap gap-2">
+        <button class="tab-btn px-4 py-2 rounded-xl border" data-tab="daily"><i class="fa-regular fa-square-check mr-2"></i>Daily Tasks</button>
+        <button class="tab-btn px-4 py-2 rounded-xl border" data-tab="prayer"><i class="fa-solid fa-mosque mr-2"></i>Namaz Times</button>
+        <button class="tab-btn px-4 py-2 rounded-xl border" data-tab="finance"><i class="fa-solid fa-wallet mr-2"></i>Finance Tracker</button>
+        <button class="tab-btn px-4 py-2 rounded-xl border" data-tab="goals"><i class="fa-solid fa-bullseye mr-2"></i>Weekly Goals</button>
+        <button class="tab-btn px-4 py-2 rounded-xl border" data-tab="habits"><i class="fa-solid fa-seedling mr-2"></i>Habits</button>
+        <button class="tab-btn px-4 py-2 rounded-xl border" data-tab="future"><i class="fa-regular fa-calendar-plus mr-2"></i>Future Plans</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Content -->
+  <main class="section space-y-5">
+
+    <!-- Daily Tasks -->
+    <section id="daily" class="tab card p-4">
+      <div class="flex items-center justify-between">
+        <h2 class="font-semibold text-lg">Daily Tasks</h2>
+        <div class="flex items-center gap-3">
+          <div class="text-center">
+            <div id="tasks-completed" class="kpi">0</div>
+            <div class="kpi-label">Completed</div>
+          </div>
+          <div class="ring">
+            <svg viewBox="0 0 100 100" width="72" height="72">
+              <circle cx="50" cy="50" r="38" stroke="#e5e7eb" stroke-width="10" fill="none"/>
+              <circle id="ringProgress" cx="50" cy="50" r="38" stroke="#10b981" stroke-width="10" fill="none" stroke-linecap="round" stroke-dasharray="238" stroke-dashoffset="238"/>
+            </svg>
+            <div id="percent" class="pct">0%</div>
+          </div>
+        </div>
+      </div>
+      <div class="mt-3 flex gap-2">
+        <input id="new-task" class="flex-1" placeholder="Add a new task…"/>
+        <button id="add-task" class="px-4 bg-[--brand] text-white rounded-xl"><i class="fa-solid fa-plus"></i></button>
+      </div>
+      <p class="muted text-xs mt-2">Tip: Tick = complete, Cross = missed. Time auto save hota hai.</p>
+      <div id="tasks-list" class="mt-3"></div>
+      <div class="mt-4 pt-4 border-t">
+        <div class="font-medium mb-1">Today's Summary</div>
+        <div id="daily-summary" class="muted text-sm">Your daily summary will appear here at midnight.</div>
+      </div>
+    </section>
+
+    <!-- Prayer -->
+    <section id="prayer" class="tab card p-4 hidden">
+      <h2 class="font-semibold text-lg mb-2">Namaz Times</h2>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div class="row"><div class="flex items-center gap-3"><i class="fa-solid fa-sun text-amber-500"></i>Fajr</div><div><span id="fajr-time">05:30</span> • <span id="fajr-status" class="muted text-xs">Next</span></div></div>
+        <div class="row"><div class="flex items-center gap-3"><i class="fa-solid fa-cloud-sun text-green-500"></i>Dhuhr</div><div><span id="dhuhr-time">12:15</span> • <span id="dhuhr-status" class="muted text-xs">Next</span></div></div>
+        <div class="row"><div class="flex items-center gap-3"><i class="fa-solid fa-sun text-teal-500"></i>Asr</div><div><span id="asr-time">15:45</span> • <span id="asr-status" class="muted text-xs">Next</span></div></div>
+        <div class="row"><div class="flex items-center gap-3"><i class="fa-solid fa-cloud-moon text-indigo-500"></i>Maghrib</div><div><span id="maghrib-time">18:30</span> • <span id="maghrib-status" class="muted text-xs">Next</span></div></div>
+        <div class="row"><div class="flex items-center gap-3"><i class="fa-solid fa-moon text-purple-500"></i>Isha</div><div><span id="isha-time">19:45</span> • <span id="isha-status" class="muted text-xs">Next</span></div></div>
+        <div class="row"><div class="flex items-center gap-3"><i class="fa-solid fa-praying-hands text-slate-500"></i>Jummah</div><div><span id="jummah-time">12:30</span> • <span id="jummah-status" class="muted text-xs">Every Friday</span></div></div>
+      </div>
+      <div class="mt-3 flex items-center gap-2">
+        <input type="checkbox" id="prayer-notifications" class="w-4 h-4" checked>
+        <label for="prayer-notifications" class="text-sm">Enable prayer time notifications (5 min before)</label>
+      </div>
+    </section>
+
+    <!-- Finance -->
+    <section id="finance" class="tab card p-4 hidden">
+      <h2 class="font-semibold text-lg mb-3">Finance Tracker</h2>
+      <div class="grid-3">
+        <div class="card p-4">
+          <div class="kpi" id="total-balance">Rs 0</div>
+          <div class="kpi-label">Total Balance</div>
+        </div>
+        <div class="card p-4">
+          <div class="kpi" id="today-expenses">Rs 0</div>
+          <div class="kpi-label">Today's Expenses</div>
+        </div>
+        <div class="card p-4">
+          <div class="kpi" id="savings-rate">0%</div>
+          <div class="kpi-label">Savings Rate</div>
+        </div>
+      </div>
+      <div class="mt-4 flex gap-2">
+        <input id="expense-amount" type="number" inputmode="decimal" placeholder="Amount"/>
+        <input id="expense-category" placeholder="Category (e.g., Food, Transport)"/>
+        <button id="add-expense" class="px-4 bg-[--brand] text-white rounded-xl"><i class="fa-solid fa-plus"></i></button>
+      </div>
+      <div class="mt-4 overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead><tr class="text-left text-slate-500">
+            <th class="py-2">Date</th><th>Amount</th><th>Category</th><th>Time</th>
+          </tr></thead>
+          <tbody id="expenses-list"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- Goals -->
+    <section id="goals" class="tab card p-4 hidden">
+      <h2 class="font-semibold text-lg mb-3">Weekly Goals</h2>
+      <div class="flex gap-2">
+        <input id="new-goal" placeholder="e.g., No fast food this week"/>
+        <button id="add-goal" class="px-4 bg-[--brand] text-white rounded-xl"><i class="fa-solid fa-plus"></i></button>
+      </div>
+      <div id="goals-list" class="mt-3"></div>
+      <div class="mt-4 p-3 rounded-xl bg-amber-50 border border-amber-200">
+        <div class="text-sm"><span id="goals-completed">0</span> of <span id="total-goals">0</span> goals achieved</div>
+        <div class="h-2 bg-amber-200 rounded mt-2"><div id="goals-progress-bar" class="h-2 bg-amber-500 rounded" style="width:0%"></div></div>
+      </div>
+    </section>
+
+    <!-- Habits -->
+    <section id="habits" class="tab card p-4 hidden">
+      <h2 class="font-semibold text-lg mb-3">Habits & Self-Improvement</h2>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div>
+          <div class="flex gap-2">
+            <input id="new-bad-habit" placeholder="e.g., Procrastination"/>
+            <button id="add-bad-habit" class="px-4 bg-red-600 text-white rounded-xl"><i class="fa-solid fa-plus"></i></button>
+          </div>
+          <div id="bad-habits-list" class="mt-3"></div>
+        </div>
+        <div>
+          <div class="flex gap-2">
+            <input id="new-solution" placeholder="e.g., Use Pomodoro technique"/>
+            <button id="add-solution" class="px-4 bg-green-600 text-white rounded-xl"><i class="fa-solid fa-plus"></i></button>
+          </div>
+          <div id="solutions-list" class="mt-3"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Future Plans -->
+    <section id="future" class="tab card p-4 hidden">
+      <h2 class="font-semibold text-lg mb-2">Future Plans & Dreams</h2>
+      <textarea id="future-plans" placeholder="Write your future goals, dreams, and aspirations…"></textarea>
+      <button id="save-plans" class="mt-3 px-4 bg-[--brand] text-white rounded-xl">Save Plans</button>
+    </section>
+  </main>
+
+  <!-- Bottom Navigation -->
+  <nav class="bottom-nav">
+    <button class="nav-btn active" data-tab="daily"><i class="fa-regular fa-square-check"></i><span>Tasks</span></button>
+    <button class="nav-btn" data-tab="prayer"><i class="fa-solid fa-mosque"></i><span>Namaz</span></button>
+    <button class="nav-btn" data-tab="finance"><i class="fa-solid fa-wallet"></i><span>Finance</span></button>
+    <button class="nav-btn" data-tab="goals"><i class="fa-solid fa-bullseye"></i><span>Goals</span></button>
+    <button class="nav-btn" data-tab="habits"><i class="fa-solid fa-seedling"></i><span>Habits</span></button>
+    <button class="nav-btn" data-tab="future"><i class="fa-regular fa-calendar-plus"></i><span>Plans</span></button>
+  </nav>
+
+  <!-- Floating Add mirrors current tab primary action -->
+  <button id="fab" class="fab"><i class="fa-solid fa-plus"></i></button>
+
+<script>
+// ==== Basic State (same keys as your original) ====
+const state = {
+  tasks: JSON.parse(localStorage.getItem('tasks')) || [],
+  expenses: JSON.parse(localStorage.getItem('expenses')) || [],
+  goals: JSON.parse(localStorage.getItem('goals')) || [],
+  badHabits: JSON.parse(localStorage.getItem('badHabits')) || [],
+  solutions: JSON.parse(localStorage.getItem('solutions')) || [],
+  futurePlans: localStorage.getItem('futurePlans') || '',
+  totalBalance: parseFloat(localStorage.getItem('totalBalance')) || 0,
+  prayerNotifications: localStorage.getItem('prayerNotifications') !== 'false'
+};
+
+// ==== Elements ====
+const tabs = document.querySelectorAll('.tab');
+const navBtns = document.querySelectorAll('.bottom-nav .nav-btn, .desktop-tabs .tab-btn');
+const topTime = document.getElementById('top-time');
+const topDate = document.getElementById('top-date');
+const tasksList = document.getElementById('tasks-list');
+const newTaskInput = document.getElementById('new-task');
+const addTaskBtn = document.getElementById('add-task');
+const tasksCompleted = document.getElementById('tasks-completed');
+const percent = document.getElementById('percent');
+const ringProgress = document.getElementById('ringProgress');
+const dailySummary = document.getElementById('daily-summary');
+
+const expenseAmount = document.getElementById('expense-amount');
+const expenseCategory = document.getElementById('expense-category');
+const addExpenseBtn = document.getElementById('add-expense');
+const expensesList = document.getElementById('expenses-list');
+const totalBalanceEl = document.getElementById('total-balance');
+const todayExpensesEl = document.getElementById('today-expenses');
+const savingsRateEl = document.getElementById('savings-rate');
+
+const newGoalInput = document.getElementById('new-goal');
+const addGoalBtn = document.getElementById('add-goal');
+const goalsList = document.getElementById('goals-list');
+const goalsProgressBar = document.getElementById('goals-progress-bar');
+const goalsCompleted = document.getElementById('goals-completed');
+const totalGoals = document.getElementById('total-goals');
+
+const newBadHabitInput = document.getElementById('new-bad-habit');
+const addBadHabitBtn = document.getElementById('add-bad-habit');
+const badHabitsList = document.getElementById('bad-habits-list');
+const newSolutionInput = document.getElementById('new-solution');
+const addSolutionBtn = document.getElementById('add-solution');
+const solutionsList = document.getElementById('solutions-list');
+
+const futurePlansInput = document.getElementById('future-plans');
+const savePlansBtn = document.getElementById('save-plans');
+
+const prayerNotificationsCheckbox = document.getElementById('prayer-notifications');
+const fajrStatus = document.getElementById('fajr-status');
+const dhuhrStatus = document.getElementById('dhuhr-status');
+const asrStatus = document.getElementById('asr-status');
+const maghribStatus = document.getElementById('maghrib-status');
+const ishaStatus = document.getElementById('isha-status');
+
+const exportBtn = document.getElementById('exportBtn');
+const importInput = document.getElementById('importInput');
+const fab = document.getElementById('fab');
+
+// ==== Tabs ====
+function showTab(id){
+  tabs.forEach(t => t.classList.add('hidden'));
+  document.getElementById(id).classList.remove('hidden');
+  // set nav active
+  navBtns.forEach(b => b.classList.toggle('active', b.dataset.tab===id));
+  // FAB behaviour
+  fab.dataset.action = id;
+}
+navBtns.forEach(b => b.addEventListener('click', () => showTab(b.dataset.tab)));
+showTab('daily');
+
+// ==== Time ====
+function fmtDate(d){
+  return d.toLocaleDateString('en-US', {weekday:'long', year:'numeric', month:'long', day:'numeric'});
+}
+function fmtTime(d){ return d.toLocaleTimeString('en-US', {hour:'2-digit', minute:'2-digit', second:'2-digit'}); }
+function fmtShort(d){ return d.toLocaleDateString('en-US', {month:'short', day:'numeric', year:'numeric'}); }
+function dateKey(d){ return d.toISOString().split('T')[0]; }
+
+function tick(){
+  const now = new Date();
+  topTime.textContent = fmtTime(now);
+  topDate.textContent = fmtDate(now);
+  updatePrayerStatus(now);
+}
+setInterval(tick, 1000); tick();
+
+// ==== Save/Load ====
+function save(){
+  localStorage.setItem('tasks', JSON.stringify(state.tasks));
+  localStorage.setItem('expenses', JSON.stringify(state.expenses));
+  localStorage.setItem('goals', JSON.stringify(state.goals));
+  localStorage.setItem('badHabits', JSON.stringify(state.badHabits));
+  localStorage.setItem('solutions', JSON.stringify(state.solutions));
+  localStorage.setItem('futurePlans', state.futurePlans);
+  localStorage.setItem('totalBalance', state.totalBalance.toString());
+  localStorage.setItem('prayerNotifications', state.prayerNotifications.toString());
+}
+
+// ==== Tasks ====
+function renderTasks(){
+  tasksList.innerHTML='';
+  if(!state.tasks.length){
+    tasksList.innerHTML = '<div class="muted text-center text-sm py-4">No tasks yet. Add your first task above!</div>';
+  }
+  state.tasks.forEach((t,i)=>{
+    const row = document.createElement('div');
+    row.className='row';
+    row.innerHTML = `
+      <div class="flex items-center gap-3">
+        <button class="toggle text-green-600" data-i="${i}"><i class="fa-regular ${t.completed?'fa-check-square':'fa-square'}"></i></button>
+        <div>
+          <div class="${t.completed?'line-through text-slate-500':'text-slate-900'} font-medium">${t.text}</div>
+          <div class="text-xs muted">${t.time || ''} ${t.completedTime? ' • Done '+t.completedTime:''}</div>
+        </div>
+      </div>
+      <button class="del text-slate-400" data-i="${i}"><i class="fa-solid fa-trash"></i></button>`;
+    tasksList.appendChild(row);
+  });
+  // bind
+  tasksList.querySelectorAll('.toggle').forEach(btn=>btn.onclick=toggleTask);
+  tasksList.querySelectorAll('.del').forEach(btn=>btn.onclick=deleteTask);
+  updateTaskStats();
+}
+function updateTaskStats(){
+  const done = state.tasks.filter(t=>t.completed).length;
+  const total = state.tasks.length || 1;
+  tasksCompleted.textContent = done;
+  const pct = Math.round((done/total)*100);
+  percent.textContent = pct+'%';
+  const circ = 238;
+  ringProgress.style.strokeDashoffset = (circ - circ*pct/100);
+  // summary for today
+  const today = dateKey(new Date());
+  const todayTasks = state.tasks.filter(t=>t.date===today);
+  const todayDone = todayTasks.filter(t=>t.completed).length;
+  const todayPct = todayTasks.length? Math.round((todayDone/todayTasks.length)*100) : 0;
+  dailySummary.textContent = `Today you completed ${todayDone} of ${todayTasks.length} tasks (${todayPct}%).`;
+}
+function addTask(){
+  const text = newTaskInput.value.trim();
+  if(!text) return;
+  const now = new Date();
+  state.tasks.push({text, completed:false, date:dateKey(now), time: now.toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'})});
+  newTaskInput.value=''; save(); renderTasks();
+}
+function toggleTask(e){
+  const i = +e.currentTarget.dataset.i; const now=new Date();
+  const t = state.tasks[i]; t.completed = !t.completed;
+  t.completedTime = t.completed ? now.toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'}) : undefined;
+  save(); renderTasks();
+}
+function deleteTask(e){
+  const i = +e.currentTarget.dataset.i; state.tasks.splice(i,1); save(); renderTasks();
+}
+addTaskBtn.onclick = addTask;
+newTaskInput.addEventListener('keypress',(e)=>{ if(e.key==='Enter') addTask();});
+
+// ==== Expenses ====
+function renderExpenses(){
+  expensesList.innerHTML='';
+  if(!state.expenses.length){
+    expensesList.innerHTML = '<tr><td class="py-3 text-center muted" colspan="4">No expenses recorded yet.</td></tr>';
+  }
+  const sorted = [...state.expenses].sort((a,b)=> new Date(b.date+'T'+b.time) - new Date(a.date+'T'+a.time));
+  sorted.forEach(e=>{
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td class="py-2">${fmtShort(new Date(e.date))}</td>
+      <td class="py-2 font-medium">Rs ${e.amount}</td>
+      <td class="py-2">${e.category}</td>
+      <td class="py-2 muted">${e.time}</td>`;
+    expensesList.appendChild(tr);
+  });
+  updateFinanceStats();
+}
+function updateFinanceStats(){
+  totalBalanceEl.textContent = `Rs ${state.totalBalance.toLocaleString()}`;
+  const today = dateKey(new Date());
+  const tExp = state.expenses.filter(e=>e.date===today).reduce((s,e)=>s+e.amount,0);
+  todayExpensesEl.textContent = `Rs ${tExp.toLocaleString()}`;
+  const monthlyIncome = 100000;
+  const spent = state.expenses.reduce((s,e)=>s+e.amount,0);
+  const rate = monthlyIncome? Math.max(0, Math.round(((monthlyIncome-spent)/monthlyIncome)*100)) : 0;
+  savingsRateEl.textContent = `${rate}%`;
+}
+function addExpense(){
+  const amt = parseFloat(expenseAmount.value);
+  const cat = expenseCategory.value.trim();
+  if(isNaN(amt)||amt<=0||!cat) return;
+  const now = new Date();
+  state.expenses.push({amount:amt, category:cat, date:dateKey(now), time: now.toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'})});
+  state.totalBalance -= amt;
+  expenseAmount.value=''; expenseCategory.value=''; save(); renderExpenses();
+}
+addExpenseBtn.onclick = addExpense;
+
+// ==== Goals ====
+function renderGoals(){
+  goalsList.innerHTML='';
+  if(!state.goals.length){
+    goalsList.innerHTML = '<div class="muted text-center text-sm py-4">No goals set yet.</div>';
+  }
+  state.goals.forEach((g,i)=>{
+    const row = document.createElement('div'); row.className='row';
+    row.innerHTML = `<div class="flex items-center gap-3">
+      <button class="toggle-goal text-green-600" data-i="${i}"><i class="fa-regular ${g.completed?'fa-check-circle':'fa-circle'}"></i></button>
+      <div><div class="${g.completed?'line-through text-slate-500':'text-slate-900'} font-medium">${g.text}</div>
+      <div class="text-xs muted">${g.completedDate? 'Achieved on '+g.completedDate:''}</div></div>
+    </div>
+    <button class="del-goal text-slate-400" data-i="${i}"><i class="fa-solid fa-trash"></i></button>`;
+    goalsList.appendChild(row);
+  });
+  goalsList.querySelectorAll('.toggle-goal').forEach(b=>b.onclick=toggleGoal);
+  goalsList.querySelectorAll('.del-goal').forEach(b=>b.onclick=deleteGoal);
+  updateGoalStats();
+}
+function updateGoalStats(){
+  const done = state.goals.filter(g=>g.completed).length;
+  const total = state.goals.length;
+  goalsCompleted.textContent = done; totalGoals.textContent = total;
+  const pct = total? Math.round((done/total)*100) : 0;
+  goalsProgressBar.style.width = pct+'%';
+}
+function addGoal(){
+  const text = newGoalInput.value.trim(); if(!text) return;
+  state.goals.push({text, completed:false}); newGoalInput.value=''; save(); renderGoals();
+}
+function toggleGoal(e){
+  const i = +e.currentTarget.dataset.i; const now = new Date();
+  const g = state.goals[i]; g.completed = !g.completed;
+  g.completedDate = g.completed ? dateKey(now) : undefined; save(); renderGoals();
+}
+function deleteGoal(e){ const i=+e.currentTarget.dataset.i; state.goals.splice(i,1); save(); renderGoals(); }
+addGoalBtn.onclick = addGoal;
+newGoalInput.addEventListener('keypress',(e)=>{ if(e.key==='Enter') addGoal(); });
+
+// ==== Habits ====
+function renderHabits(){
+  badHabitsList.innerHTML='';
+  if(!state.badHabits.length){ badHabitsList.innerHTML='<div class="muted text-sm">No bad habits listed yet.</div>'; }
+  state.badHabits.forEach((h,i)=>{
+    const row=document.createElement('div'); row.className='row'; row.innerHTML=`
+      <div class="flex items-center gap-2"><i class="fa-solid fa-xmark text-red-500"></i><span>${h}</span></div>
+      <button class="del-bh text-red-500" data-i="${i}"><i class="fa-solid fa-trash"></i></button>`;
+    badHabitsList.appendChild(row);
+  });
+  badHabitsList.querySelectorAll('.del-bh').forEach(b=>b.onclick=deleteBadHabit);
+
+  solutionsList.innerHTML='';
+  if(!state.solutions.length){ solutionsList.innerHTML='<div class="muted text-sm">No solutions added yet.</div>'; }
+  state.solutions.forEach((h,i)=>{
+    const row=document.createElement('div'); row.className='row'; row.innerHTML=`
+      <div class="flex items-center gap-2"><i class="fa-solid fa-check text-green-500"></i><span>${h}</span></div>
+      <button class="del-sol text-green-600" data-i="${i}"><i class="fa-solid fa-trash"></i></button>`;
+    solutionsList.appendChild(row);
+  });
+  solutionsList.querySelectorAll('.del-sol').forEach(b=>b.onclick=deleteSolution);
+}
+function addBadHabit(){ const t=newBadHabitInput.value.trim(); if(!t) return; state.badHabits.push(t); newBadHabitInput.value=''; save(); renderHabits(); }
+function deleteBadHabit(e){ const i=+e.currentTarget.dataset.i; state.badHabits.splice(i,1); save(); renderHabits(); }
+function addSolution(){ const t=newSolutionInput.value.trim(); if(!t) return; state.solutions.push(t); newSolutionInput.value=''; save(); renderHabits(); }
+function deleteSolution(e){ const i=+e.currentTarget.dataset.i; state.solutions.splice(i,1); save(); renderHabits(); }
+addBadHabitBtn.onclick = addBadHabit;
+newBadHabitInput.addEventListener('keypress',(e)=>{ if(e.key==='Enter') addBadHabit(); });
+addSolutionBtn.onclick = addSolution;
+newSolutionInput.addEventListener('keypress',(e)=>{ if(e.key==='Enter') addSolution(); });
+
+// ==== Future Plans ====
+futurePlansInput.value = state.futurePlans || '';
+savePlansBtn.onclick = ()=>{ state.futurePlans = futurePlansInput.value; save(); toast('Future plans saved!'); }
+
+// ==== Export / Import ====
+exportBtn.onclick = ()=>{
+  const payload = JSON.stringify(state, null, 2);
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([payload], {type:'application/json'}));
+  a.download = 'life_manager_backup.json';
+  a.click();
+};
+importInput.onchange = (e)=>{
+  const file = e.target.files[0]; if(!file) return;
+  const reader = new FileReader();
+  reader.onload = ()=>{
+    try{
+      const data = JSON.parse(reader.result);
+      Object.assign(state, data); save();
+      renderAll(); toast('Import successful.');
+    }catch(err){ toast('Invalid backup file.'); }
+  };
+  reader.readAsText(file);
+};
+
+// ==== Toast ====
+function toast(msg){
+  let t = document.getElementById('toast');
+  if(!t){
+    t = document.createElement('div'); t.id='toast';
+    t.style.cssText='position:fixed;right:12px;bottom:calc(76px + env(safe-area-inset-bottom));background:#10b981;color:#fff;padding:10px 14px;border-radius:10px;box-shadow:var(--shadow);z-index:1200;';
+    document.body.appendChild(t);
+  }
+  t.textContent = msg; t.style.opacity='1';
+  setTimeout(()=>{ t.style.opacity='0'; }, 2200);
+}
+
+// ==== FAB primary action (based on current tab) ====
+fab.onclick = ()=>{
+  const tab = fab.dataset.action;
+  if(tab==='daily') addTask();
+  if(tab==='finance') addExpense();
+  if(tab==='goals') addGoal();
+  if(tab==='habits') addBadHabit();
+  if(tab==='future') futurePlansInput.focus();
+};
+
+// ==== Prayer mock + status ====
+const prayerTimesInMinutes = { fajr: 5*60 + 30, dhuhr: 12*60 + 15, asr: 15*60 + 45, maghrib: 18*60 + 30, isha: 19*60 + 45 };
+function updatePrayerStatus(now){
+  const m = now.getHours()*60 + now.getMinutes();
+  const order = ['fajr','dhuhr','asr','maghrib','isha'];
+  let next=null, minDiff=1e9;
+  order.forEach(p=>{
+    let t = prayerTimesInMinutes[p];
+    if(p==='fajr' && m>18*60) t += 24*60;
+    const diff = t-m;
+    if(diff>0 && diff<minDiff){ minDiff=diff; next=p; }
+  });
+  if(next){
+    const h = Math.floor(minDiff/60); const mm = (minDiff%60).toString().padStart(2,'0');
+    const msg = `Next in ${h}:${mm}`;
+    ({fajr:fajrStatus,dhuhr:dhuhrStatus,asr:asrStatus,maghrib:maghribStatus,isha:ishaStatus}[next]).textContent = msg;
+  }
+}
+
+// ==== Render All ====
+function renderAll(){ renderTasks(); renderExpenses(); renderGoals(); renderHabits(); }
+renderAll();
+
+// ==== Midnight summary schedule (simple) ====
+function scheduleMidnight(){
+  const now=new Date(); const tomorrow=new Date(now);
+  tomorrow.setDate(now.getDate()+1); tomorrow.setHours(0,0,5,0);
+  setTimeout(()=>{ updateTaskStats(); scheduleMidnight(); }, tomorrow-now);
+}
+scheduleMidnight();
+
+// ==== Service worker reg ====
+if('serviceWorker' in navigator){
+  window.addEventListener('load',()=>{
+    navigator.serviceWorker.register('./sw.js').catch(()=>{});
+  });
+}
+</script>
+</body>
+</html>
