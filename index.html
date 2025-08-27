@@ -916,6 +916,167 @@
   })();
 })();
 </script>
-<!-- ===== /Mobile Polish Injection ===== -->
+<!-- ⬇️ PASTE FROM HERE (just before </body>) -->
+<script>
+/* =========================
+   WEEKLY GOALS & HABITS — DROP-IN FIX KIT
+   - No CSS/layout change
+   - Works with your existing HTML (IDs needed as above)
+   - LocalStorage persistence
+   ========================= */
+
+document.addEventListener('DOMContentLoaded', () => {
+  // ------- Weekly Goals -------
+  const wgInput = document.getElementById('weeklyGoalInput');
+  const wgAdd   = document.getElementById('weeklyGoalAdd');
+  const wgList  = document.getElementById('weeklyGoalList');
+
+  const WG_KEY = 'plm_weekly_goals';
+
+  function loadWeeklyGoals(){
+    try { return JSON.parse(localStorage.getItem(WG_KEY)) || []; }
+    catch { return []; }
+  }
+  function saveWeeklyGoals(items){
+    localStorage.setItem(WG_KEY, JSON.stringify(items));
+  }
+  function renderWeeklyGoals(){
+    if(!wgList) return;
+    wgList.innerHTML = '';
+    const items = loadWeeklyGoals();
+    items.forEach(it => {
+      const li = document.createElement('li');
+      li.dataset.id = it.id;
+      li.innerHTML = `
+        <label style="display:flex;gap:.5rem;align-items:center;">
+          <input type="checkbox" data-act="done" ${it.done ? 'checked':''}>
+          <span style="flex:1;${it.done?'text-decoration:line-through;opacity:.7;':''}">${escapeHtml(it.text)}</span>
+          <button data-act="del" type="button" aria-label="Delete goal">✕</button>
+        </label>
+      `;
+      wgList.appendChild(li);
+    });
+  }
+  function addWeeklyGoal(text){
+    const items = loadWeeklyGoals();
+    items.push({ id: String(Date.now()), text, done:false });
+    saveWeeklyGoals(items);
+    renderWeeklyGoals();
+  }
+  function removeWeeklyGoal(id){
+    const items = loadWeeklyGoals().filter(x => x.id !== id);
+    saveWeeklyGoals(items); renderWeeklyGoals();
+  }
+  function toggleWeeklyGoal(id, val){
+    const items = loadWeeklyGoals().map(x => x.id===id?{...x,done:!!val}:x);
+    saveWeeklyGoals(items); renderWeeklyGoals();
+  }
+
+  // Bindings (only if elements exist)
+  if (wgInput && wgAdd && wgList) {
+    renderWeeklyGoals();
+    wgAdd.addEventListener('click', () => {
+      const val = (wgInput.value || '').trim();
+      if(!val) return;
+      addWeeklyGoal(val);
+      wgInput.value = '';
+      wgInput.focus();
+    });
+    wgInput.addEventListener('keydown', (e) => {
+      if(e.key === 'Enter'){ e.preventDefault(); wgAdd.click(); }
+    });
+    wgList.addEventListener('click', (e) => {
+      const li = e.target.closest('li[data-id]');
+      if(!li) return;
+      const id = li.dataset.id;
+      if (e.target.matches('[data-act="del"]')) removeWeeklyGoal(id);
+      if (e.target.matches('input[type="checkbox"][data-act="done"]')) toggleWeeklyGoal(id, e.target.checked);
+    });
+  }
+
+  // ------- Habits -------
+  const hInput = document.getElementById('habitInput');
+  const hAdd   = document.getElementById('habitAdd');
+  const hList  = document.getElementById('habitList');
+
+  const H_KEY = 'plm_habits';
+
+  function loadHabits(){
+    try { return JSON.parse(localStorage.getItem(H_KEY)) || []; }
+    catch { return []; }
+  }
+  function saveHabits(items){
+    localStorage.setItem(H_KEY, JSON.stringify(items));
+  }
+  function renderHabits(){
+    if(!hList) return;
+    hList.innerHTML = '';
+    const items = loadHabits();
+    items.forEach(it => {
+      const li = document.createElement('li');
+      li.dataset.id = it.id;
+      const doneToday = it.lastDone === today();
+      li.innerHTML = `
+        <div style="display:flex;gap:.5rem;align-items:center;">
+          <strong style="flex:1">${escapeHtml(it.name)}</strong>
+          <span title="Total days done">✅ ${it.count||0}</span>
+          <button data-act="done-today" type="button">${doneToday ? 'Done ✓' : 'Mark done'}</button>
+          <button data-act="del" type="button" aria-label="Delete habit">✕</button>
+        </div>
+      `;
+      hList.appendChild(li);
+    });
+  }
+  function addHabit(name){
+    const items = loadHabits();
+    items.push({ id:String(Date.now()), name, count:0, lastDone:null });
+    saveHabits(items); renderHabits();
+  }
+  function removeHabit(id){
+    const items = loadHabits().filter(x => x.id !== id);
+    saveHabits(items); renderHabits();
+  }
+  function markHabitToday(id){
+    const items = loadHabits().map(x => {
+      if(x.id !== id) return x;
+      if (x.lastDone === today()) return x; // already counted today
+      return { ...x, count: (x.count||0)+1, lastDone: today() };
+    });
+    saveHabits(items); renderHabits();
+  }
+
+  if (hInput && hAdd && hList) {
+    renderHabits();
+    hAdd.addEventListener('click', () => {
+      const val = (hInput.value||'').trim();
+      if(!val) return;
+      addHabit(val);
+      hInput.value=''; hInput.focus();
+    });
+    hInput.addEventListener('keydown', (e)=>{
+      if(e.key==='Enter'){ e.preventDefault(); hAdd.click(); }
+    });
+    hList.addEventListener('click', (e)=>{
+      const li = e.target.closest('li[data-id]');
+      if(!li) return;
+      const id = li.dataset.id;
+      if (e.target.matches('[data-act="del"]')) removeHabit(id);
+      if (e.target.matches('[data-act="done-today"]')) markHabitToday(id);
+    });
+  }
+
+  // ------- utils -------
+  function today(){
+    const d = new Date(); // local (Pakistan time ok)
+    const y = d.getFullYear(), m = String(d.getMonth()+1).padStart(2,'0'), dd = String(d.getDate()).padStart(2,'0');
+    return `${y}-${m}-${dd}`;
+  }
+  function escapeHtml(s=''){
+    return s.replace(/[&<>"']/g, (m)=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;', "'":'&#39;' }[m]));
+  }
+});
+</script>
+<!-- ⬆️ PASTE UNTIL HERE -->
+  <!-- ===== /Mobile Polish Injection ===== -->
 </body>
 </html>
